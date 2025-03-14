@@ -11,51 +11,16 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include "threading.h"
-#include "http.h"
+#include "socket.h"
+#include "backend.h"
 
-/**
- * Returns the socket file descriptor the server is bound to if successful and -1 if not.
- */
-int find_valid_socket(struct addrinfo *sockets, struct addrinfo *selected_socket) {
-  int sockfd;
-  int yes = 1;
+#define BUFFER_SIZE 1024
 
-  for (selected_socket = sockets; selected_socket != NULL; selected_socket = selected_socket->ai_next) {
-    sockfd = socket(selected_socket->ai_family, selected_socket->ai_socktype, selected_socket->ai_protocol);
-
-    if (sockfd == -1) {
-      perror("socket");
-      continue;
-    }
-
-    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
-      perror("setsockopt");
-      return -1;
-    }
-
-    if (bind(sockfd, selected_socket->ai_addr, selected_socket->ai_addrlen) == -1) {
-      perror("bind");
-      continue;
-    }
-
-    break;
-  }
-
-  freeaddrinfo(sockets);
-
-  if (selected_socket == NULL) {
-    fprintf(stderr, "server failed to bind\n");
-    return -1;
-  }
-
-  return sockfd;
-}
-
-void handle_connections(int sockfd, struct addrinfo *selected_socket, char *port) {
+void handle_connections(int sockfd, char *port) {
   struct sockaddr_storage incoming_addr;
   socklen_t incoming_addr_size;
-  char buf[100];
-  
+  char buf[BUFFER_SIZE];
+
   printf("server waiting for connections on port %s...\n", port);
 
   while(1) {
@@ -68,27 +33,38 @@ void handle_connections(int sockfd, struct addrinfo *selected_socket, char *port
       continue;
     }
 
-    if ((recv(new_sockfd, buf, 99, 0)) == -1) {
+    int bytes_received = recv(new_sockfd, buf, BUFFER_SIZE - 1, 0);
+
+    if (bytes_received == -1) {
       perror("recv");
       continue;
     }
 
-    char *type = strtok(buf, " ");
-    char *path = strtok(NULL, " ");
-    char *protocol = strtok(NULL, " ");
+    if (bytes_received == 0) {
+      continue;
+    }
 
-    char *response;
+    char resp[1024];
+    
+    request_backend(buf, resp);
 
-    Request req = {
-      .request_function = &parse_request,
-      .path = path,
-      .type = type,
-      .protocol = protocol,
-      .response = &response,
-      .sockfd = new_sockfd
-    };
+    send(new_sockfd, resp, strlen(resp), 0);
+    close(new_sockfd);
 
-    add_request(req);
+    // char *type = strtok(buf, " ");
+    // char *path = strtok(NULL, " ");
+    // char *protocol = strtok(NULL, " ");
+
+    // char *response;
+
+    // Request req = {
+    //   .request_function = &parse_request,
+    //   .path = path,
+    //   .type = type,
+    //   .protocol = protocol,
+    //   .response = &response,
+    //   .sockfd = new_sockfd
+    // };
   }
 }
 
@@ -112,7 +88,7 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  int port_num = 8080;
+  int port_num = 8000;
 
   if (argc == 2) {
     if (!is_number(argv[1])) {
@@ -133,7 +109,6 @@ int main(int argc, char **argv) {
 
   struct addrinfo hints;
   struct addrinfo *servinfo;
-  struct addrinfo *selected_socket;
 
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_UNSPEC;
@@ -144,7 +119,7 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
-  int sockfd = find_valid_socket(servinfo, selected_socket);
+  int sockfd = find_valid_socket(servinfo, true);
 
   if (sockfd == -1) {
     fprintf(stderr, "server could not find valid socket\n");
@@ -156,8 +131,13 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
+  if (initialize_backends() == -1) {
+    fprintf(stderr, "failed to establish connections to backend servers\n");
+    exit(1);
+  }
+
   create_thread_pool();
-  handle_connections(sockfd, selected_socket, port);
+  handle_connections(sockfd, port);
   destroy_thread_pool();
 
   return 0;
