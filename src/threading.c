@@ -9,9 +9,10 @@ pthread_cond_t queue_cond;
 pthread_t threads[THREAD_COUNT];
 Request request_queue[265];
 int request_count = 0;
+int curr_backend = 0;
 
 void execute_request(Request *request) {
-  request->request_function(request->type, request->path, request->protocol, request->response, request->sockfd);
+  request->request_function(request->value, request->sockfd, request->backend);
 }
 
 void *start_thread(void *args) {
@@ -25,6 +26,7 @@ void *start_thread(void *args) {
     }
 
     request = request_queue[0];
+    request.backend = backends[curr_backend % num_backends];
     int i;
 
     for (i = 0; i < request_count - 1; i++) {
@@ -32,6 +34,7 @@ void *start_thread(void *args) {
     }
 
     request_count--;
+    curr_backend++;
     pthread_mutex_unlock(&queue_mutex);
     execute_request(&request);
   }

@@ -4,12 +4,16 @@
 #include <stdbool.h>
 
 typedef struct Backend {
-  char *addr;
+  char *address;
+  char *port;
   int connections;
-  int sockfd;
   bool is_up;
 } Backend;
 
-Backend backends[1];
+int initialize_backends();
+void request_backend(char*, int, Backend);
+
+extern Backend backends[3];
+extern int num_backends;
 
 #endif

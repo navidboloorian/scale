@@ -6,20 +6,18 @@
 #include "backend.h"
 #include "socket.h"
 
-char *addresses[1] = {"http://localhost:8080"};
-Backend backends[1];
-int num_backends = 1;
+char *addresses[3] = {"8080", "8081", "8082"};
+int num_backends = 3;
+Backend backends[3] = {NULL, NULL, NULL};
 
 int initialize_backends() {
   int i;
 
-  int num_addresses = 1;
-
-  for (i = 0; i < num_addresses; i++) {
+  for (i = 0; i < num_backends; i++) {
 
     Backend backend = {
-      .address = "http://localhost",
-      .port = "8080",
+      .address = NULL,
+      .port = addresses[i],
       .connections = 0,
       .is_up = true
     };
@@ -30,7 +28,7 @@ int initialize_backends() {
   return 0;
 }
 
-void request_backend(char* request, char* response) {
+void request_backend(char* request, int client_sockfd, Backend backend) {
   struct addrinfo hints;
   struct addrinfo *servinfo;
   struct addrinfo *selected_socket;
@@ -39,29 +37,38 @@ void request_backend(char* request, char* response) {
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
 
-  char port[16];
-
-  if (getaddrinfo(NULL, backends[0].port, &hints, &servinfo) == -1) {
+  if (getaddrinfo(backend.address, backend.port, &hints, &servinfo) == -1) {
     perror("getaddrinfo");
     return;
   }
 
-  int sockfd = find_valid_socket(servinfo, false);
+  int server_sockfd = find_valid_socket(servinfo, false);
 
-  if (sockfd == -1) {
+  if (server_sockfd == -1) {
     perror("sockfd");
     return;
   }
-  
-  int bytes_sent = send(sockfd, request, strlen(request), 0); 
 
-  if(bytes_sent == -1) {
+  char response[1024];
+
+  if(send(server_sockfd, request, strlen(request), 0) == -1) {
     perror("send");
+    return;
   }
 
-  if(recv(sockfd, response, 1024, 0) == -1) 
+  if(recv(server_sockfd, response, 1023, 0) == -1) { 
     perror("recv");
+    return;
+  }
 
+  close(server_sockfd);
 
-  close(sockfd);
+  if(send(client_sockfd, response, strlen(response), 0) == -1) {
+    perror("send");
+    return;
+  }
+
+  printf("successfully routed to server at port %s\n", backend.port);
+
+  close(client_sockfd);
 }

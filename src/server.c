@@ -44,27 +44,13 @@ void handle_connections(int sockfd, char *port) {
       continue;
     }
 
-    char resp[1024];
-    
-    request_backend(buf, resp);
+    Request req = {
+      .request_function = &request_backend,
+      .value = buf,
+      .sockfd = new_sockfd
+    };
 
-    send(new_sockfd, resp, strlen(resp), 0);
-    close(new_sockfd);
-
-    // char *type = strtok(buf, " ");
-    // char *path = strtok(NULL, " ");
-    // char *protocol = strtok(NULL, " ");
-
-    // char *response;
-
-    // Request req = {
-    //   .request_function = &parse_request,
-    //   .path = path,
-    //   .type = type,
-    //   .protocol = protocol,
-    //   .response = &response,
-    //   .sockfd = new_sockfd
-    // };
+    add_request(req);
   }
 }
 
