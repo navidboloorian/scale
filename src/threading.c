@@ -27,6 +27,12 @@ void *start_thread(void *args) {
 
     request = request_queue[0];
     request.backend = backends[curr_backend % num_backends];
+
+    while(!request.backend.is_up) {
+      curr_backend++;
+      request.backend = backends[curr_backend % num_backends];
+    }
+
     int i;
 
     for (i = 0; i < request_count - 1; i++) {
