@@ -1,6 +1,6 @@
 # Scale: Load Balancer
 
-Scale is a load balancer written in C.
+Scale is a layer 4 load balancer written in C.
 
 ## Demo
 ![Scale Demo](scale_demo.gif)
